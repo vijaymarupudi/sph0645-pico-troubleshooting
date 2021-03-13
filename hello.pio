@@ -1,0 +1,164 @@
+;
+; Copyright (c) 2020 Raspberry Pi (Trading) Ltd.
+;
+; SPDX-License-Identifier: BSD-3-Clause
+;
+
+.program hello
+
+; Repeatedly get one word of data from the TX FIFO, stalling when the FIFO is
+; empty. Write the least significant bit to the OUT pin group.
+
+.side_set 2
+
+begin:
+    set x, 31       side 0b10
+
+loop0:
+    in pins, 1      side 0b00
+    jmp x--, loop0  side 0b10
+    set x, 31       side 0b01
+    jmp loop1       side 0b11
+
+loop1: 
+    in pins, 1      side 0b01
+    jmp x--, loop0  side 0b11
+    set x, 31       side 0b00
+    jmp loop0       side 0b10
+
+% c-sdk {
+
+#include "hardware/clocks.h"
+
+static inline void hello_program_init(PIO pio, uint sm, uint offset, uint data_pin, uint pin_sclk) {
+
+    pio_sm_config c = hello_program_get_default_config(offset);
+
+
+    sm_config_set_in_pins(&c, data_pin);
+    sm_config_set_in_shift(&c, false, true, 32);
+    sm_config_set_sideset_pins(&c, pin_sclk);
+    sm_config_set_clkdiv(&c, clock_get_hz(clk_sys) / (44100 * 32.0f * 2 * 2));
+
+
+    // Set the pin direction to output at the PIO
+    pio_sm_set_consecutive_pindirs(pio, sm, pin_sclk, 2, true);
+    pio_sm_set_consecutive_pindirs(pio, sm, data_pin, 1, false);
+
+    // Set this pin's GPIO function (connect PIO to the pad)
+    pio_gpio_init(pio, data_pin);
+    gpio_pull_down(data_pin);
+    pio_gpio_init(pio, pin_sclk);
+    pio_gpio_init(pio, pin_sclk + 1);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio, sm, offset, &c);
+    // Set the state machine running
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}
+
+.program led
+
+    set pins, 0 [10]
+    set pins, 1 [1]
+
+
+% c-sdk {
+static inline void led_program_init(PIO pio, uint sm, uint offset) {
+    pio_sm_config c = led_program_get_default_config(offset);
+    sm_config_set_out_pins(&c, 25, 1);
+    sm_config_set_set_pins(&c, 25, 1);
+    sm_config_set_clkdiv(&c, 1.0f);
+    pio_sm_set_consecutive_pindirs(pio, sm, 25, 1, true);
+    pio_gpio_init(pio, 25);
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+
+%}
+
+.program spi
+
+.side_set 1
+
+    out pins, 1 side 0
+    in pins, 1 side 1
+
+
+% c-sdk {
+
+#include "hardware/clocks.h"
+
+void spi_program_init(PIO pio, uint sm, uint offset, uint mosi) {
+    pio_sm_config c = spi_program_get_default_config(offset);
+    gpio_init(mosi);
+    gpio_init(mosi + 1);
+    gpio_init(mosi + 2);
+    pio_gpio_init(pio, mosi);
+    pio_gpio_init(pio, mosi + 1);
+    pio_gpio_init(pio, mosi + 2);
+    sm_config_set_out_pins(&c, mosi, 1);
+    sm_config_set_out_shift(&c, false, true, 8);
+    sm_config_set_in_pins(&c, mosi + 1);
+    sm_config_set_in_shift(&c, false, true, 8);
+    sm_config_set_sideset_pins(&c, mosi + 2);
+    sm_config_set_clkdiv(&c, clock_get_hz(clk_sys) / (200000.0f));
+    pio_sm_set_consecutive_pindirs(pio, sm, mosi, 1, true);
+    pio_sm_set_consecutive_pindirs(pio, sm, mosi + 2, 1, true);
+    pio_sm_set_consecutive_pindirs(pio, sm, mosi + 1, 1, false);
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+
+%}
+
+.program i2s
+
+.side_set 2
+
+bitloop1:           
+    in pins, 1       side 0b00
+    jmp x-- bitloop1  side 0b01
+    in pins, 1       side 0b10
+    set x, 31         side 0b11
+
+bitloop0:
+    in pins, 1       side 0b10
+    jmp x-- bitloop0  side 0b11
+    in pins, 1       side 0b00
+public entry_point:
+    set x, 31         side 0b01
+
+
+% c-sdk {
+#include "hardware/clocks.h"
+
+static inline void i2s_program_init(PIO pio, uint sm, uint offset, uint data_pin, uint clock_pin_base) {
+    pio_sm_config sm_config = i2s_program_get_default_config(offset);
+    
+    sm_config_set_in_pins(&sm_config, data_pin);
+    sm_config_set_sideset_pins(&sm_config, clock_pin_base);
+    sm_config_set_in_shift(&sm_config, false, true, 32);
+    sm_config_set_fifo_join(&sm_config, PIO_FIFO_JOIN_RX);
+
+    pio_sm_init(pio, sm, offset, &sm_config);
+
+    uint pin_mask = (1u << data_pin) | (0b11 << clock_pin_base);
+    pio_sm_set_pindirs_with_mask(pio, sm, (0u << data_pin) | (0b11 << clock_pin_base), pin_mask);
+    pio_sm_set_pins(pio, sm, 0); // clear pins
+
+    sm_config_set_clkdiv(&sm_config, clock_get_hz(clk_sys) / (48000 * 32 * 2 * 2.0f));
+
+
+      pio_gpio_init(pio, data_pin);
+      pio_gpio_init(pio, clock_pin_base);
+      pio_gpio_init(pio, clock_pin_base + 1);
+
+    gpio_pull_down(data_pin);
+
+    pio_sm_exec(pio, sm, pio_encode_jmp(offset + i2s_offset_entry_point));
+    pio_sm_set_enabled(pio, sm, true);
+}
+
+%}
