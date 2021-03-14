@@ -15,4 +15,4 @@ pico_sdk_init()
 add_executable(hello hello.cpp)
 pico_generate_pio_header(hello ${CMAKE_CURRENT_SOURCE_DIR}/hello.pio)
 
-target_link_libraries(hello pico_stdlib hardware_clocks hardware_pio hardware_spi hardware_dma)
+target_link_libraries(hello pico_stdlib hardware_clocks hardware_pio hardware_spi hardware_dma hardware_uart)

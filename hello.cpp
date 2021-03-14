@@ -1,3 +1,4 @@
+
 #include "pico/stdlib.h"
 #include <stdio.h>
 #include <inttypes.h>
@@ -5,6 +6,7 @@
 #include "hardware/clocks.h"
 #include "hardware/pio.h"
 #include "hardware/spi.h"
+#include "hardware/uart.h"
 #include "hello.pio.h"
 #include <algorithm>
 #include "hardware/dma.h"
@@ -24,17 +26,15 @@ PIO pio = pio0;
 uint sm;
 uint dma_chan;
 
-#define BLOCK_SIZE (44100)
+#define BLOCK_SIZE (48000)
 
 void init() {
-  stdio_init_all();
-  printf("STARTING\n");
+  stdio_uart_init_full(uart0, 921600, 0, 1);
   clk = clock_get_hz(clk_sys);
-  printu(clk);
   dma_chan = dma_claim_unused_channel(true);
 }
 
-void start_dma(int32_t* buf, size_t len) {
+static void start_dma(int32_t* buf, size_t len) {
   dma_channel_config c = dma_channel_get_default_config(dma_chan);
   channel_config_set_read_increment(&c, false);
   channel_config_set_write_increment(&c, true);
@@ -42,18 +42,30 @@ void start_dma(int32_t* buf, size_t len) {
   dma_channel_configure(dma_chan, &c, buf, &pio->rxf[sm], len, true);
 }
 
-void finalize_dma() {
+static void finalize_dma() {
   dma_channel_wait_for_finish_blocking(dma_chan);
 }
 
-void print_samples(int32_t* samples, size_t len) {
-    printf("(");
+static void print_samples(int32_t* samples, size_t len) {
     for (size_t i = 0; i < len; i++) {
-      /* printf("%d, ", samples[i]); */
-      printf("%08X, ", samples[i]);
+      auto val = samples[i];
+      printf("%d\t%X\n", val, val);
     }
-    printf(")\n");
+    /* printf("("); */
+    /* for (size_t i = 0; i < len; i++) { */
+    /*   printf("%d, ", samples[i]); */
+    /*   /1* printf("%08X, ", samples[i]); *1/ */
+    /* } */
+    /* printf(")\n"); */
 }
+
+static void normalize(int32_t* samples, size_t len) {
+  for (int i = 0; i < 10; i++) {
+    start_dma(samples, len);
+    finalize_dma();
+  }
+}
+
 
 int main() {
 
@@ -62,10 +74,16 @@ int main() {
   auto offset = pio_add_program(pio, &i2s_program);
   sm = pio_claim_unused_sm(pio, true);
 
-  int32_t samples[BLOCK_SIZE];
+  int32_t samples[BLOCK_SIZE] = {0};
   start_dma(samples, BLOCK_SIZE);
   i2s_program_init(pio, sm, offset, PIN_DATA_OUT, PIN_SCLK);
   finalize_dma();
+  normalize(samples, BLOCK_SIZE);
+
+  /* for (size_t i = 0; i < BLOCK_SIZE; i++) { */
+  /*   samples[i] = pio_sm_get_blocking(pio, sm); */
+  /* } */
+
   print_samples(samples, BLOCK_SIZE);
   return 0;
 }
