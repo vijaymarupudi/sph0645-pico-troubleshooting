@@ -15,9 +15,9 @@ bitloop1:
     set x, 30         side 0b11
 
 bitloop0:
-    in pins, 1       side 0b10
+    nop       side 0b10
     jmp x-- bitloop0  side 0b11
-    in pins, 1       side 0b00
+    nop       side 0b00
 public entry_point:
     set x, 30         side 0b01
 
