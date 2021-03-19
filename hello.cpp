@@ -1,4 +1,4 @@
-
+#include "pico/time.h"
 #include "pico/stdlib.h"
 #include <stdio.h>
 #include <inttypes.h>
@@ -30,6 +30,7 @@ uint dma_chan;
 
 void init() {
   stdio_uart_init_full(uart0, 921600, 0, 1);
+  /* stdio_init_all(); */
   clk = clock_get_hz(clk_sys);
   dma_chan = dma_claim_unused_channel(true);
 }
@@ -73,12 +74,20 @@ int main() {
 
   auto offset = pio_add_program(pio, &i2s_program);
   sm = pio_claim_unused_sm(pio, true);
+  i2s_program_init(pio, sm, offset, PIN_DATA_OUT, PIN_SCLK);
+  /* start_dma(samples, BLOCK_SIZE); */
+  /* finalize_dma(); */
+  /* normalize(samples, BLOCK_SIZE); */
 
   int32_t samples[BLOCK_SIZE] = {0};
-  start_dma(samples, BLOCK_SIZE);
-  i2s_program_init(pio, sm, offset, PIN_DATA_OUT, PIN_SCLK);
-  finalize_dma();
-  normalize(samples, BLOCK_SIZE);
+
+  auto start_time = time_us_32();
+  for (size_t i = 0; i < BLOCK_SIZE; i++) {
+      uint32_t val = pio_sm_get_blocking(pio, sm);
+      samples[i] = *((int32_t *) &val);
+  }
+
+  /* printf("%lu\n", time_us_32() - start_time); */
 
   /* for (size_t i = 0; i < BLOCK_SIZE; i++) { */
   /*   samples[i] = pio_sm_get_blocking(pio, sm); */
