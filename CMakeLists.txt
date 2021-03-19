@@ -12,7 +12,7 @@ project(MyProj)
 # # initialize the Raspberry Pi Pico SDK
 pico_sdk_init()
 
-add_executable(hello hello.cpp)
-pico_generate_pio_header(hello ${CMAKE_CURRENT_SOURCE_DIR}/hello.pio)
+add_executable(main main.cpp)
+pico_generate_pio_header(main ${CMAKE_CURRENT_SOURCE_DIR}/sph0645.pio)
 
-target_link_libraries(hello pico_stdlib hardware_clocks hardware_pio hardware_spi hardware_dma hardware_uart)
+target_link_libraries(main pico_stdlib hardware_clocks hardware_pio hardware_spi hardware_dma hardware_uart)

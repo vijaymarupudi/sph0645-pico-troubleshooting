@@ -7,7 +7,7 @@
 #include "hardware/pio.h"
 #include "hardware/spi.h"
 #include "hardware/uart.h"
-#include "hello.pio.h"
+#include "sph0645.pio.h"
 #include <algorithm>
 #include "hardware/dma.h"
 
